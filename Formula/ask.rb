@@ -12,8 +12,8 @@ class Ask < Formula
 
   desc "Lightweight, stateless terminal AI CLI that knows when to search the web"
   homepage "https://ask.aolbeam.com"
-  url "https://files.pythonhosted.org/packages/source/a/aolbeam-ask/aolbeam_ask-0.1.0.tar.gz" # TODO: real sdist URL
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"           # TODO: real sha256
+  url "https://files.pythonhosted.org/packages/e0/60/54966f126807e46e32627f7f7620e064e1d9c6f1d10e51536bc1b8f0b98d/aolbeam_ask-0.1.0.tar.gz"
+  sha256 "29561ae48685a92d6a99727f08b0e14e32ce1a7559733dbdedd1c027e7484a96"
   license "MIT"
 
   depends_on "python@3.12"
