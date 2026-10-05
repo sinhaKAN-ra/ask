@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ask — a terminal AI that knows when to search the web</title>
+<meta name="description" content="A lightweight, stateless terminal AI CLI that searches the web only when the model self-assesses its answer as stale. Any OpenAI-compatible API. Zero idle memory.">
+<meta property="og:title" content="ask — a terminal AI that knows when to search the web">
+<meta property="og:description" content="Searches the web only when the model admits its answer might be stale. Single-file, stdlib-only, zero idle footprint.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ask.aolbeam.com">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>❯</text></svg>">
+<style>
+  :root{
+    --bg:#0d1117; --surface:#161b22; --border:#30363d; --text:#e6edf3;
+    --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --amber:#d29922;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  .wrap{max-width:860px;margin:0 auto;padding:0 20px}
+  code{font-family:var(--mono);font-size:.9em}
+
+  header{text-align:center;padding:90px 20px 60px}
+  .logo{font-family:var(--mono);font-size:2.6rem;font-weight:700;color:var(--text)}
+  .logo .caret{color:var(--green)}
+  h1{font-size:2.2rem;line-height:1.2;margin:22px 0 14px;font-weight:700}
+  .tagline{font-size:1.18rem;color:var(--muted);max-width:620px;margin:0 auto 32px}
+  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  .btn{display:inline-block;padding:11px 22px;border-radius:8px;font-weight:600;font-size:.98rem;border:1px solid var(--border)}
+  .btn-primary{background:var(--accent);color:#0d1117;border-color:var(--accent)}
+  .btn-primary:hover{filter:brightness(1.1);text-decoration:none}
+  .btn-ghost:hover{border-color:var(--accent);text-decoration:none}
+
+  .term{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin:40px 0;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.4)}
+  .term-bar{background:#0b0f14;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:7px;align-items:center}
+  .dot{width:12px;height:12px;border-radius:50%}
+  .dot.r{background:#ff5f56}.dot.y{background:#ffbd2e}.dot.g{background:#27c93f}
+  .term-title{margin-left:10px;color:var(--muted);font-family:var(--mono);font-size:.8rem}
+  .term pre{padding:20px;overflow-x:auto;font-family:var(--mono);font-size:.88rem;line-height:1.7}
+  .term .prompt{color:var(--green)}
+  .term .cmd{color:var(--text)}
+  .term .out{color:var(--muted)}
+  .term .sys{color:var(--amber)}
+  .term .src{color:var(--accent)}
+
+  section{padding:46px 0;border-top:1px solid var(--border)}
+  h2{font-size:1.6rem;margin-bottom:8px}
+  .sub{color:var(--muted);margin-bottom:28px}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
+  .card h3{font-size:1.05rem;margin-bottom:6px}
+  .card p{color:var(--muted);font-size:.94rem}
+  .card .ico{font-size:1.4rem;margin-bottom:8px}
+
+  .how{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:6px}
+  .step{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px}
+  .step .n{font-family:var(--mono);color:var(--green);font-weight:700}
+  .step h4{font-size:.98rem;margin:6px 0 4px}
+  .step p{color:var(--muted);font-size:.88rem}
+
+  .install pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-family:var(--mono);font-size:.9rem;overflow-x:auto;margin-bottom:10px}
+  .install .k{color:var(--green)}
+  .note{color:var(--muted);font-size:.9rem;margin-top:6px}
+
+  footer{text-align:center;padding:50px 20px;color:var(--muted);font-size:.9rem;border-top:1px solid var(--border)}
+  footer a{margin:0 8px}
+  @media(max-width:600px){h1{font-size:1.7rem}.logo{font-size:2rem}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo"><span class="caret">❯</span> ask</div>
+    <h1>A terminal AI that knows when to search the web.</h1>
+    <p class="tagline">Instant answers for what the model knows. Automatic, cited web search for what it doesn't — because it tells you when it's not sure.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://github.com/sinhaKAN-ra/ask">★ View on GitHub</a>
+      <a class="btn btn-ghost" href="#install">Install</a>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="term">
+    <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="term-title">zsh — ask</span></div>
+<pre><span class="prompt">❯</span> <span class="cmd">ask "explain git rebase vs merge in 3 lines"</span>
+<span class="out">Git merge joins two histories with a new commit, keeping both branches.
+Git rebase replays your commits onto another branch for a linear history.
+Use merge to preserve context; use rebase for a clean log.</span>
+
+<span class="prompt">❯</span> <span class="cmd">ask "latest stable version of Rust"</span>
+<span class="sys">[ask] searching the web (tavily) — model self-assessed: version may have changed</span>
+<span class="out">Rust 1.98.1 </span><span class="src">[1]</span>
+
+<span class="out">Sources:</span>
+  <span class="src">[1]</span> <span class="out">Announcing Rust 1.98.1 | Rust Blog</span>
+      <span class="src">https://blog.rust-lang.org/...</span></pre>
+  </div>
+</div>
+
+<section id="why">
+  <div class="wrap">
+    <h2>Why it's different</h2>
+    <p class="sub">Most terminal AI tools pick one extreme. <code>ask</code> fills the empty middle.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">🐢</div><h3>Never search</h3><p>Fast, but confidently wrong on anything after the model's training cutoff.</p></div>
+      <div class="card"><div class="ico">🔁</div><h3>Always search</h3><p>Accurate on fresh facts, but slow and heavy on every single query.</p></div>
+      <div class="card" style="border-color:var(--green)"><div class="ico">🎯</div><h3>ask: search when stale</h3><p>The model self-assesses its own answer and only searches when it admits it might be out of date.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">A simple, reliable mechanism — model self-reporting, not fragile phrase-matching.</p>
+    <div class="how">
+      <div class="step"><div class="n">01</div><h4>Answer</h4><p>The model answers your question normally.</p></div>
+      <div class="step"><div class="n">02</div><h4>Self-assess</h4><p>It appends a hidden line: <code>NEEDS_WEB: yes/no</code> + a reason.</p></div>
+      <div class="step"><div class="n">03</div><h4>Decide</h4><p>ask reads that line, strips it from view, and searches only if flagged.</p></div>
+      <div class="step"><div class="n">04</div><h4>Ground &amp; cite</h4><p>Re-asks grounded in results, prints the answer with numbered sources.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Features</h2>
+    <p class="sub">Everything you'd want from a terminal companion — and nothing resident when idle.</p>
+    <div class="grid">
+      <div class="card"><div class="ico">🪶</div><h3>Zero idle memory</h3><p>No daemon, no server. Each call spawns, runs ~1–2s, prints, and exits.</p></div>
+      <div class="card"><div class="ico">🔌</div><h3>Any OpenAI-compatible API</h3><p>Groq, Gemini, OpenRouter, Cerebras, or a fully local Ollama.</p></div>
+      <div class="card"><div class="ico">📄</div><h3>File &amp; line context</h3><p><code>ask -f big.py:50-120 "..."</code> — send only the lines you need.</p></div>
+      <div class="card"><div class="ico">📥</div><h3>Stdin piping</h3><p><code>cat error.log | ask "what broke?"</code></p></div>
+      <div class="card"><div class="ico">🔎</div><h3>Pluggable search</h3><p>Keyless DuckDuckGo by default; Tavily, Serper, or Brave with a key.</p></div>
+      <div class="card"><div class="ico">💬</div><h3>Conversation memory</h3><p>Readable sessions you can list, resume, and rename.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="install" class="install">
+  <div class="wrap">
+    <h2>Install</h2>
+    <p class="sub">The package is <code>aolbeam-ask</code>; the command is <code>ask</code>.</p>
+
+    <p class="note"><strong>pipx</strong> (recommended)</p>
+    <pre><span class="k">pipx</span> install aolbeam-ask</pre>
+
+    <p class="note"><strong>pip</strong></p>
+    <pre><span class="k">pip</span> install aolbeam-ask</pre>
+
+    <p class="note"><strong>Homebrew</strong></p>
+    <pre><span class="k">brew</span> install sinhaKAN-ra/tap/ask</pre>
+
+    <p class="note"><strong>One-line script</strong></p>
+    <pre><span class="k">curl</span> -fsSL https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.sh | bash</pre>
+
+    <p class="note">Then get a free key at <a href="https://console.groq.com/keys">console.groq.com/keys</a>, <code>export GROQ_API_KEY="gsk_..."</code>, and run <code>ask "hello"</code>. Full docs in the <a href="https://github.com/sinhaKAN-ra/ask#readme">README</a>.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>MIT licensed · built by <a href="https://github.com/sinhaKAN-ra">Karan Sinha</a></p>
+    <p style="margin-top:10px">
+      <a href="https://github.com/sinhaKAN-ra/ask">GitHub</a>·
+      <a href="https://github.com/sinhaKAN-ra/ask/issues">Issues</a>·
+      <a href="https://github.com/sinhaKAN-ra/ask/blob/main/CONTRIBUTING.md">Contribute</a>·
+      <a href="mailto:nomore.report@gmail.com">Contact</a>
+    </p>
+  </div>
+</footer>
+
+</body>
+</html>
