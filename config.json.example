@@ -1,0 +1,30 @@
+{
+  "provider": "groq",
+  "base_url": "https://api.groq.com/openai/v1",
+  "model": "llama-3.3-70b-versatile",
+
+  "_comment_api_key": "Put your key here OR set the env var named by api_key_env. Leaving this blank and using the env var is recommended so no secret lives in the file.",
+  "api_key": "",
+  "api_key_env": "GROQ_API_KEY",
+
+  "system_prompt": "You are a concise, accurate terminal assistant. Answer directly. Use short code blocks when relevant.",
+  "max_tokens": 1024,
+  "temperature": 0.4,
+
+  "_comment_web": "Web fallback: the model self-assesses staleness and only searches when needed. search_provider: duckduckgo (keyless) | tavily | serper | brave. For tavily/serper/brave set search_api_key OR the SEARCH_API_KEY env var.",
+  "web_fallback": true,
+  "search_provider": "duckduckgo",
+  "search_api_key": "",
+  "search_api_key_env": "SEARCH_API_KEY",
+  "search_results": 5,
+  "search_max_chars": 6000,
+  "web_on_freshness_cues": true,
+
+  "context_window": 128000,
+  "history_turns": 12,
+  "max_file_chars": 48000,
+  "resume_threshold_hours": 2,
+  "show_metrics": true,
+  "context_warn_fraction": 0.75,
+  "chars_per_token_estimate": 4
+}
