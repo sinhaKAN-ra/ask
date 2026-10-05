@@ -39,23 +39,106 @@ and add Topics: `cli llm ai terminal assistant groq web-search ollama`.
 
 ## 2. Publish to PyPI
 
+### 2a. What credentials you need (and what the package does NOT ship)
+
+Publishing requires **your own PyPI account + an API token**. These are
+*maintainer* credentials — they let you upload to the index. They are
+completely separate from the runtime API keys the tool uses.
+
+> **The package ships NO API keys.** `aolbeam-ask` has zero embedded
+> credentials. Every end user supplies their *own* provider key (Groq,
+> Tavily, etc.) via an environment variable or their local
+> `~/.ask-cli/config.json` — see the README "Setup" section. Nothing you do
+> here puts a key into the published artifact; `twine check` + the secret
+> scan already confirmed the tree is clean.
+
+You need exactly one credential to publish: a **PyPI API token**.
+
+1. Create/verify a PyPI account: https://pypi.org/account/register
+2. Enable 2FA (PyPI requires it to upload).
+3. Mint a token: https://pypi.org/manage/account/token/ → "Add API token" →
+   scope **"Entire account"** for the first upload (narrow it to the
+   `aolbeam-ask` project afterward). Copy it now — it starts with `pypi-`
+   and is shown only once.
+4. (Recommended) Do the same on https://test.pypi.org for a dry run — it has
+   a **separate** account and a **separate** token.
+
+### 2b. Install the build + upload tooling
+
+```bash
+python3 -m pip install --upgrade build twine
+```
+- `build` → produces the wheel (`.whl`) and source dist (`.tar.gz`).
+- `twine` → validates and uploads them to PyPI.
+
+### 2c. Build and validate
+
 ```bash
 cd ~/aolbeam-ask
-python3 -m pip install --upgrade build twine
+rm -rf dist/ build/ *.egg-info src/*.egg-info
 python3 -m build                      # creates dist/*.whl and *.tar.gz
-python3 -m twine check dist/*         # sanity check metadata
+python3 -m twine check dist/*         # must say PASSED for both files
 ```
-Get a token at https://pypi.org/manage/account/token/ (scope: entire account
-for the first upload). Then:
+Smoke-test the built wheel in a throwaway venv before uploading:
+```bash
+python3 -m venv /tmp/ask-test
+/tmp/ask-test/bin/pip install dist/aolbeam_ask-0.1.0-py3-none-any.whl
+/tmp/ask-test/bin/ask --config        # confirms the `ask` command installed
+rm -rf /tmp/ask-test
+```
+
+### 2d. (Recommended) dry run on TestPyPI first
+
+```bash
+python3 -m twine upload --repository testpypi dist/*
+# username: __token__
+# password: <your TestPyPI token, the whole pypi-... string>
+
+# confirm it installs from TestPyPI:
+python3 -m venv /tmp/ask-live && /tmp/ask-live/bin/pip install \
+  --index-url https://test.pypi.org/simple/ aolbeam-ask
+/tmp/ask-live/bin/ask --config && rm -rf /tmp/ask-live
+```
+
+### 2e. Upload to real PyPI
+
 ```bash
 python3 -m twine upload dist/*
 # username: __token__
-# password: pypi-<your-token>
+# password: <your real PyPI token>
 ```
-Verify: `pipx install aolbeam-ask && ask --config`
+Live at https://pypi.org/project/aolbeam-ask . Verify:
+```bash
+pipx install aolbeam-ask && ask --config
+```
 
-> Tip: test on TestPyPI first with
-> `twine upload --repository testpypi dist/*` if you want a dry run.
+> **Version numbers are permanent.** You cannot re-upload `0.1.0` once it is
+> published (even after deleting it). To ship a fix, bump the `version` in
+> `pyproject.toml` to `0.1.1` and rebuild.
+
+### 2f. Store the token so you don't paste it every time (`~/.pypirc`)
+
+`twine` reads credentials from `~/.pypirc`. With this file present you can run
+`twine upload dist/*` with no username/password prompt. Put your real tokens
+in place of the placeholders and keep the file private (`chmod 600`):
+```ini
+[distutils]
+index-servers =
+    pypi
+    testpypi
+
+[pypi]
+username = __token__
+password = pypi-REPLACE_WITH_YOUR_REAL_PYPI_TOKEN
+
+[testpypi]
+repository = https://test.pypi.org/legacy/
+username = __token__
+password = pypi-REPLACE_WITH_YOUR_REAL_TESTPYPI_TOKEN
+```
+A template has been created at `~/.pypirc` for you — edit the two
+`REPLACE_WITH_...` lines with your actual tokens. The `username` stays the
+literal string `__token__` for API-token auth.
 
 ---
 

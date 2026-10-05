@@ -90,6 +90,13 @@ uvx aolbeam-ask "your question"
 
 `ask` needs one thing: an API key for an OpenAI-compatible provider. The default is **Groq** (free key, very fast).
 
+> **You bring your own keys.** `aolbeam-ask` ships with **no API keys of any
+> kind** — not for the LLM provider, not for web search. You create your own
+> free key(s) and supply them via an environment variable or your local
+> `~/.ask-cli/config.json`. Keys live only on your machine; nothing is sent
+> anywhere except directly to the provider you configured.
+
+
 1. Get a free key at [console.groq.com/keys](https://console.groq.com/keys).
 2. Set it as an environment variable (recommended — keeps the secret out of any file):
    ```bash
