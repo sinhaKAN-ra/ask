@@ -1,0 +1,8 @@
+# Vercel hosts only the static landing page in docs/.
+# Hide everything Python so Vercel does not auto-detect a Python runtime.
+pyproject.toml
+src/
+Formula/
+install.sh
+config.json.example
+*.py
