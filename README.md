@@ -22,6 +22,18 @@ Sources:
 
 ---
 
+## Why I built this
+
+I wanted **lightweight LLM access from the terminal** — the place I already live as a developer.
+
+Every existing option made me stop and open something heavy first: a browser tab for ChatGPT/Claude, a desktop app idling in the background, an Electron client eating hundreds of MB of RAM, or an IDE assistant that only works inside the editor. Just to ask one quick question — *"what's the flag for this?"*, *"explain this stack trace"* — I had to break focus, launch a resource-hungry tool, and leave it running.
+
+That felt backwards. A quick question should cost a quick command, not a running process.
+
+So `ask` is built on one rule: **spawn, answer, exit.** Each call starts a process that runs for a second or two, prints the answer, and is gone — **zero idle memory, no daemon, no background app.** It's a single stdlib-only Python file. Nothing stays resident between questions. You get the answer in your terminal, in your flow, and your machine goes right back to doing nothing.
+
+---
+
 ## Why it's different
 
 Most terminal AI tools fall into one of two camps:
