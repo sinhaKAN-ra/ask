@@ -7,7 +7,13 @@
 
 ## LinkedIn (narrated beats)
 
-I built a terminal AI tool. The interesting part isn't that it answers questions — it's *when it decides to shut up and go look things up*.
+Every time I had a quick dev question, I had to open something heavy to ask it.
+
+A browser tab for ChatGPT. A desktop app idling in the background. An Electron client eating hundreds of MB. Or an assistant trapped inside the editor. Just to ask "what's the flag for this?" I'd break focus, launch a resource-hungry tool, and leave it running.
+
+I live in the terminal. I wanted the LLM there too — lightweight, no app, nothing resident.
+
+So I built one. And the interesting part isn't that it answers questions — it's *when it decides to shut up and go look things up*.
 
 The problem I kept hitting:
 - Terminal LLM tools either never touch the web (fast, but confidently wrong on anything recent)
@@ -32,7 +38,7 @@ Other things I cared about:
 It's open source, MIT, one readable Python file, zero dependencies.
 
 Install: pipx install aolbeam-ask (command is `ask`)
-Repo: <GITHUB_URL>
+Repo: https://github.com/sinhaKAN-ra/ask
 Docs: https://ask.aolbeam.com
 
 Would love feedback from anyone who lives in the terminal.
@@ -46,13 +52,15 @@ Would love feedback from anyone who lives in the terminal.
 **Title:** Show HN: ask – a terminal LLM that searches the web only when it knows it's stale
 
 **Body:**
-I wanted a terminal AI that didn't make me choose between "fast but outdated" and "always searches and slow". So `ask` makes the model self-assess: it answers, then appends a machine-readable `NEEDS_WEB: yes/no` line with a reason. The tool reads that, strips it, and only runs a web search + grounded re-ask when the model flagged its own answer as stale or uncertain. Freshness words in your question ("latest", "2026") also trigger it; `-w` forces it.
+Every quick dev question made me open something heavy — a browser tab, a desktop app idling in the background, an Electron client eating hundreds of MB, or an assistant locked inside the editor. I live in the terminal and wanted the LLM there too: lightweight, no resident app.
+
+So I built `ask`. Beyond just being in the terminal, I didn't want to choose between "fast but outdated" and "always searches and slow". So `ask` makes the model self-assess: it answers, then appends a machine-readable `NEEDS_WEB: yes/no` line with a reason. The tool reads that, strips it, and only runs a web search + grounded re-ask when the model flagged its own answer as stale or uncertain. Freshness words in your question ("latest", "2026") also trigger it; `-w` forces it.
 
 It's deliberately a single file, stdlib-only, zero dependencies, and has zero idle footprint — no daemon, each call just spawns and exits. Works with any OpenAI-compatible API (Groq/Gemini/OpenRouter/Ollama). Keyless DuckDuckGo search by default; Tavily/Serper/Brave if you want better results.
 
 Also does file context with line ranges (`ask -f big.py:50-120 "..."`), stdin piping, conversation memory, and per-answer token/latency metrics.
 
-Repo: <GITHUB_URL>  ·  MIT.
+Repo: https://github.com/sinhaKAN-ra/ask  ·  MIT.
 
 Happy to answer questions about the self-assessment approach — curious if people think model self-reporting of staleness is reliable enough (it's been good in practice, with freshness-cue + `-w` as backstops).
 
@@ -66,7 +74,7 @@ Happy to answer questions about the self-assessment approach — curious if peop
 Most terminal LLM CLIs either never search or always search. `ask` does the middle: the model self-assesses staleness (appends a hidden `NEEDS_WEB:` flag), and the tool only searches + re-grounds when it flags itself. Single file, stdlib only, zero idle memory (no daemon). Any OpenAI-compatible API. File context with line ranges, stdin piping, cited sources.
 
 `pipx install aolbeam-ask` → command is `ask`.
-Repo: <GITHUB_URL>  (MIT)
+Repo: https://github.com/sinhaKAN-ra/ask  (MIT)
 
 ---
 
@@ -75,4 +83,4 @@ Repo: <GITHUB_URL>  (MIT)
 **Title:** `ask` — stateless terminal CLI, points at local Ollama, self-decides when to augment with web search
 
 **Body:**
-Set `base_url` to your Ollama endpoint and `ask` runs fully local — except it'll self-assess when its answer is stale and (optionally) pull web results to ground a re-ask. Keyless DuckDuckGo or bring a Tavily key. One file, no deps, nothing resident between calls. Repo: <GITHUB_URL>
+Set `base_url` to your Ollama endpoint and `ask` runs fully local — except it'll self-assess when its answer is stale and (optionally) pull web results to ground a re-ask. Keyless DuckDuckGo or bring a Tavily key. One file, no deps, nothing resident between calls. Repo: https://github.com/sinhaKAN-ra/ask

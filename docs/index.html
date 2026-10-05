@@ -120,6 +120,19 @@ Use merge to preserve context; use rebase for a clean log.</span>
   </div>
 </div>
 
+<section id="origin">
+  <div class="wrap">
+    <h2>Why I built this</h2>
+    <p class="sub">A quick question should cost a quick command — not a running process.</p>
+    <p style="color:var(--muted);max-width:680px;line-height:1.75">
+      I wanted <strong style="color:var(--text)">lightweight LLM access from the terminal</strong>, the place I already live as a developer. But every option made me stop and open something heavy first — a browser tab, a desktop app idling in the background, an Electron client eating hundreds of MB of RAM, or an assistant locked inside the editor. Just to ask <em>"what's the flag for this?"</em> I had to break focus and leave a resource-hungry tool running.
+    </p>
+    <p style="color:var(--muted);max-width:680px;line-height:1.75;margin-top:14px">
+      That felt backwards. So <code>ask</code> is built on one rule: <strong style="color:var(--green)">spawn, answer, exit.</strong> Each call runs for a second or two, prints the answer, and is gone — a single stdlib-only Python file, <strong style="color:var(--text)">zero idle memory, no daemon, no background app.</strong> You get the answer in your flow, and your machine goes right back to doing nothing.
+    </p>
+  </div>
+</section>
+
 <section id="why">
   <div class="wrap">
     <h2>Why it's different</h2>
