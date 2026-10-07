@@ -24,3 +24,12 @@ env/
 *.swp
 .idea/
 .vscode/
+.vercel
+
+# Private maintainer runbooks and unreleased outreach drafts
+/docs/PUBLISH.md
+/docs/awesome-list-submissions.md
+/docs/launch-posts.md
+/docs/dev/PUBLISH.md
+/docs/dev/awesome-list-submissions.md
+/docs/dev/launch-posts.md
