@@ -12,6 +12,12 @@ Features:
   - Resume prompt when the last session is older than resume_threshold_hours.
   - Per-answer metrics: prompt/completion/total tokens, context-window usage %,
     latency, model, plus a warning as you approach the context limit.
+  - Cross-platform: macOS, Linux, Windows (cmd / PowerShell / WSL / Git Bash).
+    VT/ANSI color is auto-enabled on Windows 10+; degrades gracefully on older
+    terminals. Output wraps to your current terminal width automatically.
+  - Output format: "rich" (Markdown rendered in ANSI color, default when TTY
+    supports color), "plain" (word-wrapped text, no color), or "md" (raw
+    Markdown, for piped output or editors). Set via --format or in config.
 
 Usage:
   ask "your question"              one-shot, continues the active session
@@ -30,16 +36,410 @@ Usage:
   ask --info                       show current session stats and config
   ask --config                     print resolved config + where it lives
   ask --clear                      archive the active session and start clean
+  ask --format rich|plain|md       override output format for this invocation
 """
 
 import json
 import os
+import re
+import shutil
 import sys
+import textwrap
 import time
 import urllib.request
 import urllib.error
 import urllib.parse
 from datetime import datetime, timezone
+
+# ---------------------------------------------------------------------------
+# Cross-platform terminal setup
+# ---------------------------------------------------------------------------
+def _enable_windows_vt():
+    """Enable VT/ANSI escape processing on Windows 10+ and reconfigure UTF-8.
+    Safe no-op on all other platforms and older Windows."""
+    # Ensure stdout/stderr use UTF-8 on Windows so box-drawing/unicode glyphs
+    # don't trigger UnicodeEncodeError under cp1252 / cp437.
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    if hasattr(sys.stderr, "reconfigure"):
+        try:
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        import ctypes.wintypes
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        ENABLE_VT = 0x0004
+        for handle_id in (-11, -12):  # stdout, stderr
+            h = kernel32.GetStdHandle(handle_id)
+            if h and h != ctypes.wintypes.HANDLE(-1).value:
+                mode = ctypes.wintypes.DWORD(0)
+                if kernel32.GetConsoleMode(h, ctypes.byref(mode)):
+                    kernel32.SetConsoleMode(h, mode.value | ENABLE_VT)
+    except Exception:
+        pass
+
+
+def _color_supported() -> bool:
+    """True when stdout is an ANSI-capable interactive TTY."""
+    if not sys.stdout.isatty():
+        return False
+    if sys.platform == "win32":
+        return True
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("TERM", "").lower() == "dumb":
+        return False
+    return True
+
+
+def _terminal_width(fallback: int = 80) -> int:
+    """Return the current terminal column width, bounded sensibly."""
+    try:
+        cols = shutil.get_terminal_size(fallback=(fallback, 24)).columns
+        return max(40, min(cols, 120))
+    except Exception:
+        return fallback
+
+
+# ---------------------------------------------------------------------------
+# Markdown → terminal renderer  (stdlib only, zero dependencies)
+# ---------------------------------------------------------------------------
+_RESET = "\033[0m"
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_ITALIC = "\033[3m"
+_UL = "\033[4m"
+_FG_CYAN = "\033[36m"
+_FG_GREEN = "\033[32m"
+_FG_YELLOW = "\033[33m"
+_FG_BLUE = "\033[34m"
+_FG_MAGENTA = "\033[35m"
+_ANSI_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]")
+
+
+def _visible_len(s: str) -> int:
+    """Return the printable character count of a string, ignoring ANSI escapes."""
+    return len(_ANSI_RE.sub("", s))
+
+
+def _wrap_ansi(text: str, width: int, initial_indent: str = "", subsequent_indent: str = "") -> str:
+    """Word-wrap text taking ANSI escape sequences into account.
+    Keeps styles active across line wraps and ensures every line ends cleanly."""
+    if not text:
+        return initial_indent
+    words = text.split(" ")
+    lines: list[str] = []
+    cur_line: list[str] = []
+    cur_len = _visible_len(initial_indent)
+    indent = initial_indent
+    active_style = ""
+
+    for word in words:
+        if not word:
+            cur_line.append("")
+            cur_len += 1
+            continue
+
+        w_len = _visible_len(word)
+        if cur_line and (cur_len + 1 + w_len > width):
+            line_str = indent + " ".join(cur_line)
+            if active_style:
+                line_str += _RESET
+            lines.append(line_str)
+            cur_line = [active_style + word if active_style else word]
+            indent = subsequent_indent
+            cur_len = _visible_len(subsequent_indent) + w_len
+        else:
+            cur_line.append(word)
+            cur_len += (1 if len(cur_line) > 1 else 0) + w_len
+
+        # Track any active ANSI escape codes
+        for m in re.finditer(r"\x1b\[([0-9;]*)m", word):
+            code = m.group(1)
+            if code in ("0", ""):
+                active_style = ""
+            else:
+                active_style = m.group(0)
+
+    if cur_line:
+        lines.append(indent + " ".join(cur_line))
+    return "\n".join(lines)
+
+
+def _apply_inline(text: str, color: bool, osc8: bool = True) -> str:
+    """Apply bold, italic, code, and hyperlinks."""
+    if not color:
+        text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
+        text = re.sub(r"__(.+?)__", r"\1", text)
+        text = re.sub(r"\*(.+?)\*", r"\1", text)
+        text = re.sub(r"(?<!\w)_(.+?)_(?!\w)", r"\1", text)
+        text = re.sub(r"`([^`]+)`", r"\1", text)
+        text = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)", r"\1 (\2)", text)
+        return text
+
+    # Markdown links [text](url) -> OSC 8 hyperlink or text (url)
+    if osc8:
+        text = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)",
+                      lambda m: osc8_link(m.group(2), m.group(1)), text)
+    else:
+        text = re.sub(r"\[([^\]]+)\]\((https?://[^\)]+)\)",
+                      lambda m: f"{_UL}{m.group(1)}{_RESET} {_DIM}({m.group(2)}){_RESET}", text)
+
+    # Bold **text** or __text__
+    text = re.sub(r"\*\*(.+?)\*\*", lambda m: f"{_BOLD}{m.group(1)}{_RESET}", text)
+    text = re.sub(r"__(.+?)__", lambda m: f"{_BOLD}{m.group(1)}{_RESET}", text)
+    # Italic *text* or _text_
+    text = re.sub(r"\*([^*]+?)\*", lambda m: f"{_ITALIC}{m.group(1)}{_RESET}", text)
+    text = re.sub(r"(?<!\w)_([^_]+?)_(?!\w)", lambda m: f"{_ITALIC}{m.group(1)}{_RESET}", text)
+    # Inline code `...`
+    text = re.sub(r"`([^`]+)`", lambda m: f"{_FG_CYAN}{m.group(1)}{_RESET}", text)
+    return text
+
+
+def _heading_line(level: int, text: str, width: int, color: bool) -> str:
+    """Render a Markdown heading."""
+    plain = text.strip()
+    if not color:
+        prefix = "#" * level + " "
+        return f"{prefix}{plain}"
+    if level == 1:
+        bar = "═" * min(len(plain) + 4, width)
+        return f"{_BOLD}{_FG_YELLOW}{plain.upper()}{_RESET}\n{_DIM}{bar}{_RESET}"
+    if level == 2:
+        bar = "─" * min(len(plain) + 2, width)
+        return f"{_BOLD}{_FG_GREEN}{plain}{_RESET}\n{_DIM}{bar}{_RESET}"
+    if level == 3:
+        return f"{_BOLD}{_FG_BLUE}■ {plain}{_RESET}"
+    return f"{_BOLD}▪ {plain}{_RESET}"
+
+
+def _render_table(table_lines: list[str], width: int, color: bool) -> list[str]:
+    """Render a Markdown table into neat terminal columns."""
+    rows = []
+    for line in table_lines:
+        parts = [p.strip() for p in line.strip().strip("|").split("|")]
+        # Skip divider rows like |---|---|
+        if all(re.match(r"^:?-+:?$", p) for p in parts if p):
+            continue
+        rows.append(parts)
+    if not rows:
+        return []
+
+    num_cols = max(len(r) for r in rows)
+    for r in rows:
+        r.extend([""] * (num_cols - len(r)))
+
+    col_widths = [max(len(rows[ri][ci]) for ri in range(len(rows))) for ci in range(num_cols)]
+    avail = max(20, width - 4 - 3 * (num_cols - 1))
+    tot = sum(col_widths)
+    if tot > avail and tot > 0:
+        ratio = avail / tot
+        col_widths = [max(4, int(w * ratio)) for w in col_widths]
+
+    def fmt_cell(val: str, w: int) -> str:
+        if len(val) > w:
+            return val[:max(0, w - 1)] + "…"
+        return val.ljust(w)
+
+    res = []
+    bold = _BOLD if color else ""
+    dim = _DIM if color else ""
+    cyan = _FG_CYAN if color else ""
+    reset = _RESET if color else ""
+
+    # Header row
+    hdr = f" {dim}│{reset} ".join(fmt_cell(rows[0][i], col_widths[i]) for i in range(num_cols))
+    res.append(f"  {bold}{cyan}{hdr}{reset}")
+
+    # Separator
+    div = f"{dim}─┼─{reset}".join(f"{dim}{'─' * col_widths[i]}{reset}" for i in range(num_cols))
+    res.append(f"  {div}")
+
+    # Data rows
+    for r in rows[1:]:
+        row_str = f" {dim}│{reset} ".join(fmt_cell(r[i], col_widths[i]) for i in range(num_cols))
+        res.append(f"  {row_str}")
+
+    return res
+
+
+def render_markdown(text: str, color: bool = True, width: int = 80, osc8: bool = True) -> str:
+    """Convert Markdown text to terminal-friendly output.
+    Handles headings, code blocks, tables, blockquotes, lists, and inline styles.
+    """
+    lines = text.splitlines()
+    out: list[str] = []
+    in_code = False
+    code_lang = ""
+    code_buf: list[str] = []
+    table_buf: list[str] = []
+
+    fence_re = re.compile(r"^(```|~~~)(.*)")
+    heading_re = re.compile(r"^(#{1,6})\s+(.*)")
+    hr_re = re.compile(r"^[-*_]{3,}\s*$")
+    bullet_re = re.compile(r"^(\s*)([-*+])\s+(.*)")
+    numbered_re = re.compile(r"^(\s*)(\d+\.)\s+(.*)")
+    quote_re = re.compile(r"^>\s?(.*)")
+
+    def flush_code():
+        nonlocal in_code, code_buf, code_lang
+        if not code_buf and not code_lang:
+            in_code = False
+            return
+        lang_label = f" {code_lang} " if code_lang else " code "
+        if color:
+            c_bar = f"{_DIM}{_FG_CYAN}"
+            bar_len = max(0, min(width - len(lang_label) - 5, 40))
+            out.append(f"{c_bar}  ┌──{lang_label}{'─' * bar_len}{_RESET}")
+            for l in code_buf:
+                out.append(f"{c_bar}  │ {_RESET}{l}")
+            out.append(f"{c_bar}  └──{'─' * (bar_len + len(lang_label) + 2)}{_RESET}")
+        else:
+            out.append(f"  [{code_lang or 'code'}]")
+            for l in code_buf:
+                out.append(f"    {l}")
+        code_buf = []
+        code_lang = ""
+        in_code = False
+
+    def flush_table():
+        nonlocal table_buf
+        if not table_buf:
+            return
+        out.extend(_render_table(table_buf, width, color))
+        table_buf = []
+
+    for raw_line in lines:
+        # Fenced code block open/close
+        if in_code:
+            fm = fence_re.match(raw_line)
+            if fm:
+                flush_code()
+            else:
+                code_buf.append(raw_line)
+            continue
+
+        fm = fence_re.match(raw_line)
+        if fm:
+            flush_table()
+            in_code = True
+            code_lang = fm.group(2).strip()
+            continue
+
+        # Markdown tables
+        sline = raw_line.strip()
+        if sline.startswith("|") and sline.endswith("|"):
+            table_buf.append(raw_line)
+            continue
+        else:
+            flush_table()
+
+        # Headings
+        hm = heading_re.match(raw_line)
+        if hm:
+            level = len(hm.group(1))
+            out.append(_heading_line(level, hm.group(2), width, color))
+            continue
+
+        # Horizontal rule
+        if hr_re.match(raw_line):
+            rule = "─" * min(width, 60)
+            out.append(f"{_DIM}{rule}{_RESET}" if color else rule)
+            continue
+
+        # Blockquote
+        qm = quote_re.match(raw_line)
+        if qm:
+            formatted = _apply_inline(qm.group(1), color, osc8)
+            if color:
+                bar = f"{_DIM}{_FG_MAGENTA}│{_RESET} {_ITALIC}"
+                wrapped = _wrap_ansi(formatted, width, bar, bar)
+                out.append(wrapped + _RESET)
+            else:
+                wrapped = _wrap_ansi(formatted, width, "> ", "> ")
+                out.append(wrapped)
+            continue
+
+        # Bullet list
+        bm = bullet_re.match(raw_line)
+        if bm:
+            indent_level = len(bm.group(1)) // 2
+            prefix = "  " * indent_level
+            bullets = ["•", "◦", "▪"]
+            b_char = bullets[min(indent_level, len(bullets) - 1)]
+            marker = f"{_FG_GREEN}{b_char}{_RESET}" if color else b_char
+            first = f"{prefix} {marker} "
+            hang = f"{prefix}   "
+            formatted = _apply_inline(bm.group(3), color, osc8)
+            out.append(_wrap_ansi(formatted, width, first, hang))
+            continue
+
+        # Numbered list
+        nm = numbered_re.match(raw_line)
+        if nm:
+            indent_level = len(nm.group(1)) // 2
+            prefix = "  " * indent_level
+            num_str = nm.group(2)
+            marker = f"{_BOLD}{_FG_YELLOW}{num_str}{_RESET}" if color else num_str
+            first = f"{prefix} {marker} "
+            hang = f"{prefix} " + " " * (len(num_str) + 1)
+            formatted = _apply_inline(nm.group(3), color, osc8)
+            out.append(_wrap_ansi(formatted, width, first, hang))
+            continue
+
+        # Blank line (collapse multiple consecutive blanks)
+        if not sline:
+            if out and out[-1] != "":
+                out.append("")
+            continue
+
+        # Normal paragraph text
+        inline = _apply_inline(raw_line, color, osc8)
+        wrapped = _wrap_ansi(inline, width)
+        out.append(wrapped)
+
+    flush_code()
+    flush_table()
+    return "\n".join(out)
+
+
+def _resolve_format(cfg: dict, override: str | None = None) -> str:
+    """Determine effective output format: rich | plain | md.
+
+    Priority: CLI --format flag > config output_format > auto-detect.
+    """
+    fmt = (override or cfg.get("output_format", "auto")).lower().strip()
+    if fmt in ("rich", "plain", "md", "markdown", "raw"):
+        return "md" if fmt in ("markdown", "raw") else fmt
+    # auto:
+    # If stdout is redirected/piped (e.g. ask ... > file), default to clean md
+    if not sys.stdout.isatty():
+        return "md"
+    # Interactive TTY: use rich if ANSI color supported, otherwise plain
+    return "rich" if _color_supported() else "plain"
+
+
+def print_answer(text: str, cfg: dict, fmt_override: str | None = None) -> None:
+    """Print the model answer rendered for the current terminal."""
+    fmt = _resolve_format(cfg, fmt_override)
+    if fmt == "md":
+        print(text)
+        return
+    width = _terminal_width()
+    color = fmt == "rich"
+    osc8 = cfg.get("osc8_links", True)
+    rendered = render_markdown(text, color=color, width=width, osc8=osc8)
+    print(rendered)
+
+
 
 # ---------------------------------------------------------------------------
 # Config. Everything here can be overridden in ~/.ask-cli/config.json.
@@ -108,6 +508,13 @@ DEFAULT_CONFIG = {
     "context_warn_fraction": 0.75,
     # Rough chars-per-token estimate, used only when the API omits usage.
     "chars_per_token_estimate": 4,
+    # Output format for the model's answer:
+    #   "auto"  — rich when stdout is a color TTY, plain otherwise (default)
+    #   "rich"  — Markdown rendered with ANSI color/bold (recommended for TTYs)
+    #   "plain" — word-wrapped text, no ANSI codes (good for dumb terminals)
+    #   "md"    — raw Markdown, no wrapping (good for piping into editors)
+    # Override per-invocation with:  ask --format rich|plain|md
+    "output_format": "auto",
 }
 
 # Known-provider hints printed by --config to make switching easy.
@@ -660,30 +1067,44 @@ def print_metrics(cfg, body, latency, est_prompt, file_meta=None, web_status=Non
     win = cfg["context_window"]
     used_frac = tt / win if win else 0
     finish = (body.get("choices") or [{}])[0].get("finish_reason", "?")
+    bar_tag = " ~est" if estimated else ""
 
-    bar_tag = " (estimated)" if estimated else ""
-    print("\n\033[2m" + "-" * 48, file=sys.stderr)
-    print(f"model      : {cfg['model']}  ({cfg['provider']})", file=sys.stderr)
+    # Width-aware separator
+    w = _terminal_width(fallback=60)
+    sep = "─" * min(w, 60)
+
+    # Context bar: visual fill proportional to usage
+    bar_w = 20
+    filled = int(round(used_frac * bar_w))
+    if used_frac >= cfg.get("context_warn_fraction", 0.75):
+        fill_char, bar_color = "█", "\033[33m"  # yellow = warn
+    else:
+        fill_char, bar_color = "█", "\033[32m"   # green = ok
+    bar_str = f"{bar_color}{'█' * filled}\033[2m{'░' * (bar_w - filled)}\033[0m\033[2m"
+
+    print(f"\n\033[2m{sep}", file=sys.stderr)
+    print(f"  model   : {cfg['model']}  ({cfg['provider']})", file=sys.stderr)
     if web_status:
         provider, n, trigger = web_status
-        print(f"web search : {provider} — {n} results  [{trigger}]", file=sys.stderr)
+        print(f"  web     : {provider} — {n} result(s)  [{trigger}]", file=sys.stderr)
     if file_meta:
         for path, chars, truncated in file_meta:
             name = os.path.basename(path) if path != "<stdin>" else "<stdin>"
             flag = "  [TRUNCATED]" if truncated else ""
-            print(f"context in : {name}  (~{chars} chars, ~{chars//cfg['chars_per_token_estimate']} tok){flag}",
+            tok_est = chars // cfg["chars_per_token_estimate"]
+            print(f"  context : {name}  (~{chars:,} chars / ~{tok_est:,} tok){flag}",
                   file=sys.stderr)
-    print(f"tokens     : prompt {pt} + completion {ct} = {tt}{bar_tag}", file=sys.stderr)
-    print(f"context    : {tt}/{win}  ({used_frac*100:.1f}% of window used)", file=sys.stderr)
-    print(f"latency    : {latency:.2f}s   finish: {finish}", file=sys.stderr)
+    print(f"  tokens  : {pt:,} prompt + {ct:,} compl = {tt:,}{bar_tag}", file=sys.stderr)
+    print(f"  context : [{bar_str}] {used_frac*100:.1f}% of {win:,}", file=sys.stderr)
+    print(f"  latency : {latency:.2f}s   finish: {finish}", file=sys.stderr)
     if finish == "length":
-        print("warning    : response hit max_tokens and was CUT OFF. "
-              "Raise max_tokens in config for complete answers.", file=sys.stderr)
+        print(f"  \033[0m\033[33m⚠ response was CUT OFF (hit max_tokens={cfg['max_tokens']})."
+              " Raise max_tokens in config.\033[2m", file=sys.stderr)
     if used_frac >= cfg["context_warn_fraction"]:
-        print(f"warning    : using {used_frac*100:.0f}% of the context window. "
-              "Older turns may be dropped and answer quality can degrade. "
-              "Consider `ask --new` or lowering history_turns.", file=sys.stderr)
-    print("\033[0m", end="", file=sys.stderr)
+        print(f"  \033[0m\033[33m⚠ {used_frac*100:.0f}% context used — older turns may be"
+              " dropped. Try `ask --new` or lower history_turns.\033[2m", file=sys.stderr)
+    print(f"{sep}\033[0m", file=sys.stderr)
+
 
 
 # ---------------------------------------------------------------------------
@@ -700,6 +1121,8 @@ def cmd_info(cfg):
     print(f"model          : {cfg['model']} ({cfg['provider']})")
     print(f"context window : {cfg['context_window']} tokens")
     print(f"history sent   : last {cfg['history_turns']} exchanges")
+    print(f"output format  : {cfg.get('output_format', 'auto')} (effective: {_resolve_format(cfg, None)})")
+    print(f"terminal width : {_terminal_width()} cols  (color: {'yes' if _color_supported() else 'no'})")
     if n:
         est = estimate_tokens([{"content": m["content"]} for m in s["messages"]], cfg)
         print(f"stored size    : ~{est} tokens of transcript")
@@ -804,6 +1227,7 @@ def cmd_config(cfg):
 # Main
 # ---------------------------------------------------------------------------
 def main():
+    _enable_windows_vt()
     cfg = load_config()
     args = sys.argv[1:]
 
@@ -852,6 +1276,7 @@ def main():
     i = 0
     force_web = False
     disable_web = False
+    fmt_override = None
     while i < len(args):
         a = args[i]
         if a in ("-f", "--file"):
@@ -870,10 +1295,25 @@ def main():
             force_web = True
         elif a == "--no-web":
             disable_web = True
+        elif a == "--format":
+            if i + 1 < len(args):
+                fmt_override = args[i + 1].lower()
+                i += 2
+                continue
+            else:
+                print("[ask] --format needs an argument (rich | plain | md)", file=sys.stderr)
+                return 1
+        elif a.startswith("--format="):
+            fmt_override = a.split("=", 1)[1].lower()
         else:
             rest.append(a)
         i += 1
     query = " ".join(rest).strip()
+
+    if fmt_override and fmt_override not in ("rich", "plain", "md", "markdown", "raw", "auto"):
+        print(f"[ask] unknown format '{fmt_override}'. Supported: rich, plain, md, auto",
+              file=sys.stderr)
+        return 1
 
     api_key = resolve_api_key(cfg)
     if not api_key:
@@ -1000,12 +1440,15 @@ def main():
         if use_links:
             answer = link_citations(answer, web_sources)
 
-    print(answer)
+    print_answer(answer, cfg, fmt_override)
 
     # Show the web references the grounded answer was based on, as clickable
     # OSC 8 terminal hyperlinks (plain text where the terminal lacks support).
     if web_sources:
-        print("\n\033[2mSources:", file=sys.stderr)
+        w = _terminal_width(fallback=60)
+        src_sep = "─" * min(w, 60)
+        print(f"\n\033[2m{src_sep}", file=sys.stderr)
+        print("  Sources:", file=sys.stderr)
         for i, (title, url) in enumerate(web_sources, 1):
             label = (title.strip() or url)
             if url and use_links:
@@ -1015,7 +1458,8 @@ def main():
                 print(f"  [{i}] {label}\n      {url}", file=sys.stderr)
             else:
                 print(f"  [{i}] {label}", file=sys.stderr)
-        print("\033[0m", end="", file=sys.stderr)
+        print(f"{src_sep}\033[0m", file=sys.stderr)
+
 
     # Persist both sides. Store the user's QUESTION plus short notes (attached
     # files, whether web was used) — NOT the full file blob or search text, so

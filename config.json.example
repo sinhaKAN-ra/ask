@@ -26,5 +26,9 @@
   "resume_threshold_hours": 2,
   "show_metrics": true,
   "context_warn_fraction": 0.75,
-  "chars_per_token_estimate": 4
+  "chars_per_token_estimate": 4,
+
+  "_comment_display": "output_format: auto (rich in color TTY, md/plain when piped) | rich | plain | md. osc8_links: clickable terminal hyperlinks.",
+  "output_format": "auto",
+  "osc8_links": true
 }

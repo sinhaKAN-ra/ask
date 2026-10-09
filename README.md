@@ -56,7 +56,10 @@ It does this with a simple, reliable mechanism: the system prompt asks the model
 - ✂️ **Line selection** — `ask -f big.py:50-120 "..."` sends only the lines you want, so large files never overload the context window.
 - 📥 **Stdin piping** — `cat error.log | ask "what broke?"` or `ls -la | ask "which is largest?"`.
 - 💬 **Conversation memory** — sessions saved as readable `.txt` + structured `.json`; resume, list, rename, switch.
-- 📊 **Per-answer metrics** — tokens, context-window usage %, latency, model, with a warning as you approach the limit.
+- 🎨 **Terminal-native formatting** — output dynamically wraps to your terminal width, with rich ANSI rendering for headings, code blocks, tables, lists, and blockquotes.
+- 🎛️ **Controlled output format** — choose `--format rich` (ANSI styled), `--format plain` (clean text, no colors), or `--format md` (raw Markdown for piping). Set defaults in config.
+- 🪟 **Cross-platform** — runs seamlessly on **macOS**, **Linux**, and **Windows** (Command Prompt, PowerShell, Windows Terminal, WSL, Git Bash) with auto-enabled VT processing and UTF-8 encoding.
+- 📊 **Visual metrics** — per-answer token breakdown, latency, model info, and visual context-window bar chart `[████░░░░░░░░]` with approaching-limit warnings.
 - 🔗 **Cited sources** — web answers print a numbered Sources block with clickable links (OSC 8, in terminals that support it).
 - 🪶 **Zero idle footprint** — no server, no daemon. Each call spawns, runs ~1–2s, prints, and exits. Nothing stays resident.
 
@@ -86,9 +89,14 @@ brew install sinhaKAN-ra/tap/ask
 pipx install git+https://github.com/sinhaKAN-ra/ask
 ```
 
-### One-line script install (single-file, no packaging)
+### One-line script install (macOS / Linux — bash / zsh)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.sh | bash
+```
+
+### One-line script install (Windows — PowerShell)
+```powershell
+irm https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.ps1 | iex
 ```
 
 ### Run without installing
@@ -150,12 +158,18 @@ ask -f config.py:42 "what does this do?"     # single line
 cat error.log | ask "what caused this?"
 git diff | ask "write a commit message"
 
+# Terminal output formatting
+ask --format rich "explain DNS"        # styled ANSI (bold headers, code borders, tables)
+ask --format plain "explain DNS"       # clean text, no ANSI codes (great for dumb terminals)
+ask --format md "write a Dockerfile"   # raw Markdown (pipe to files/editors)
+ask "generate a README" > README.md    # auto-detect defaults to md when piped!
+
 # Conversations
 ask -n "fresh topic"      # start a new conversation
 ask --list                # list saved conversations
 ask --select 2            # resume conversation #2
 ask --title "A good name" # rename the active conversation
-ask --info                # session stats + token usage
+ask --info                # session stats + token usage + terminal width
 ask --config              # show resolved config and where it lives
 ask --clear               # archive current and start clean
 ```
@@ -179,7 +193,9 @@ Config lives at `~/.ask-cli/config.json` (created on first run). See [`config.js
 | `web_on_freshness_cues` | `true` | Also search when the question has words like "latest"/"2026" |
 | `history_turns` | `12` | How many prior exchanges to send as context |
 | `max_file_chars` | `48000` | Safety cap per attached file (truncates with a warning) |
+| `output_format` | `auto` | `auto` (rich in TTY, md when piped) \| `rich` \| `plain` \| `md` |
 | `show_metrics` | `true` | Print the per-answer metrics footer |
+| `osc8_links` | `true` | Clickable terminal hyperlinks (OSC 8) |
 
 **Switching provider** (example — local Ollama):
 ```json
