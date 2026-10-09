@@ -11,7 +11,7 @@
   "max_tokens": 1024,
   "temperature": 0.4,
 
-  "_comment_web": "Web fallback: the model self-assesses staleness and only searches when needed. search_provider: duckduckgo (keyless) | tavily | serper | brave. For tavily/serper/brave set search_api_key OR the SEARCH_API_KEY env var.",
+  "_comment_web": "Web fallback: the model self-assesses staleness and only searches when needed. search_provider: duckduckgo (keyless) | tavily | serper | brave. Run ask --setup-search brave (or tavily/serper) to configure. Supports BRAVE_API_KEY, TAVILY_API_KEY, SERPER_API_KEY, or the configured search_api_key_env; legacy SEARCH_API_KEY still works.",
   "web_fallback": true,
   "search_provider": "duckduckgo",
   "search_api_key": "",
