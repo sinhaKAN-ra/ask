@@ -3,219 +3,906 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ask — a terminal AI that knows when to search the web</title>
-<meta name="description" content="A lightweight, stateless terminal AI CLI that searches the web only when the model self-assesses its answer as stale. Any OpenAI-compatible API. Zero idle memory.">
-<meta property="og:title" content="ask — a terminal AI that knows when to search the web">
-<meta property="og:description" content="Searches the web only when the model admits its answer might be stale. Single-file, stdlib-only, zero idle footprint.">
+<title>ask — the zero-idle terminal AI for your editor & shell</title>
+<meta name="description" content="A lightweight, stateless terminal AI CLI that knows when to search the web. For quick doubts and syntax checks right in your VS Code terminal without breaking flow. Zero idle memory.">
+<meta property="og:title" content="ask — lightweight terminal AI with live web fallback">
+<meta property="og:description" content="No daemons, no browser tabs, zero idle memory. Fast answers right in your VS Code or shell terminal, with live web search when things are fresh.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ask.aolbeam.com">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>❯</text></svg>">
 <style>
-  :root{
-    --bg:#0d1117; --surface:#161b22; --border:#30363d; --text:#e6edf3;
-    --muted:#8b949e; --accent:#58a6ff; --green:#3fb950; --amber:#d29922;
-    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  :root {
+    --bg: #090d13;
+    --surface: #111822;
+    --surface-hover: #172130;
+    --surface-card: #0e1520;
+    --border: #1f2d3d;
+    --border-bright: #2d4158;
+    --text: #f0f6fc;
+    --muted: #8b9bb0;
+    --accent: #38bdf8;
+    --accent-glow: rgba(56, 189, 248, 0.15);
+    --green: #10b981;
+    --green-glow: rgba(16, 185, 129, 0.2);
+    --amber: #f59e0b;
+    --purple: #c084fc;
+    --cyan: #22d3ee;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
-  *{box-sizing:border-box;margin:0;padding:0}
-  html{scroll-behavior:smooth}
-  body{background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased}
-  a{color:var(--accent);text-decoration:none}
-  a:hover{text-decoration:underline}
-  .wrap{max-width:860px;margin:0 auto;padding:0 20px}
-  code{font-family:var(--mono);font-size:.9em}
 
-  header{text-align:center;padding:90px 20px 60px}
-  .logo{font-family:var(--mono);font-size:2.6rem;font-weight:700;color:var(--text)}
-  .logo .caret{color:var(--green)}
-  h1{font-size:2.2rem;line-height:1.2;margin:22px 0 14px;font-weight:700}
-  .tagline{font-size:1.18rem;color:var(--muted);max-width:620px;margin:0 auto 32px}
-  .cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
-  .btn{display:inline-block;padding:11px 22px;border-radius:8px;font-weight:600;font-size:.98rem;border:1px solid var(--border)}
-  .btn-primary{background:var(--accent);color:#0d1117;border-color:var(--accent)}
-  .btn-primary:hover{filter:brightness(1.1);text-decoration:none}
-  .btn-ghost:hover{border-color:var(--accent);text-decoration:none}
-  .install-oneliner{display:inline-block;font-family:var(--mono);font-size:.95rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 18px;margin:0 auto 26px;color:var(--text)}
-  .install-oneliner .k{color:var(--green)}
-  .avail{display:flex;gap:10px;justify-content:center;align-items:center;flex-wrap:wrap;margin-top:34px}
-  .avail-label{color:var(--muted);font-size:.85rem;text-transform:uppercase;letter-spacing:.06em}
-  .chip{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:6px 14px;font-size:.9rem;color:var(--text)}
-  .chip:hover{border-color:var(--green);text-decoration:none}
-  .chip code{color:var(--muted);font-size:.82em}
-  .chip-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green)}
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.12), transparent),
+      radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.05), transparent 40%);
+  }
 
-  .term{background:var(--surface);border:1px solid var(--border);border-radius:12px;margin:40px 0;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.4)}
-  .term-bar{background:#0b0f14;padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:7px;align-items:center}
-  .dot{width:12px;height:12px;border-radius:50%}
-  .dot.r{background:#ff5f56}.dot.y{background:#ffbd2e}.dot.g{background:#27c93f}
-  .term-title{margin-left:10px;color:var(--muted);font-family:var(--mono);font-size:.8rem}
-  .term pre{padding:20px;overflow-x:auto;font-family:var(--mono);font-size:.88rem;line-height:1.7}
-  .term .prompt{color:var(--green)}
-  .term .cmd{color:var(--text)}
-  .term .out{color:var(--muted)}
-  .term .sys{color:var(--amber)}
-  .term .src{color:var(--accent)}
+  a { color: var(--accent); text-decoration: none; transition: all .15s ease; }
+  a:hover { color: #7dd3fc; text-decoration: none; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px; }
+  code { font-family: var(--mono); font-size: .9em; }
 
-  section{padding:46px 0;border-top:1px solid var(--border)}
-  h2{font-size:1.6rem;margin-bottom:8px}
-  .sub{color:var(--muted);margin-bottom:28px}
+  /* Navigation */
+  nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(31, 45, 61, 0.6);
+    backdrop-filter: blur(12px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(9, 13, 19, 0.85);
+  }
+  .nav-brand {
+    font-family: var(--mono);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .nav-brand .caret { color: var(--green); }
+  .nav-links { display: flex; gap: 20px; align-items: center; font-size: .92rem; }
+  .nav-links a { color: var(--muted); }
+  .nav-links a:hover { color: var(--text); }
+  .nav-badge {
+    background: rgba(56, 189, 248, 0.1);
+    color: var(--accent);
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: .78rem;
+    font-family: var(--mono);
+  }
 
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px}
-  .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px}
-  .card h3{font-size:1.05rem;margin-bottom:6px}
-  .card p{color:var(--muted);font-size:.94rem}
-  .card .ico{font-size:1.4rem;margin-bottom:8px}
+  /* Header / Hero */
+  header { text-align: center; padding: 75px 20px 40px; }
+  .pill-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 999px;
+    font-size: .84rem;
+    color: var(--green);
+    margin-bottom: 24px;
+  }
+  .pill-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 8px var(--green);
+  }
+  h1 {
+    font-size: clamp(2.2rem, 5vw, 3.4rem);
+    line-height: 1.15;
+    margin: 0 0 20px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(180deg, #ffffff 30%, #a5b4fc 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .tagline {
+    font-size: clamp(1.05rem, 2.5vw, 1.25rem);
+    color: var(--muted);
+    max-width: 680px;
+    margin: 0 auto 36px;
+    line-height: 1.6;
+  }
+  .tagline strong { color: var(--text); font-weight: 600; }
 
-  .how{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:6px}
-  .step{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px}
-  .step .n{font-family:var(--mono);color:var(--green);font-weight:700}
-  .step h4{font-size:.98rem;margin:6px 0 4px}
-  .step p{color:var(--muted);font-size:.88rem}
+  /* Hero Install Bar */
+  .install-box {
+    display: inline-flex;
+    align-items: center;
+    background: var(--surface);
+    border: 1px solid var(--border-bright);
+    border-radius: 10px;
+    padding: 4px 6px 4px 16px;
+    margin-bottom: 28px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    max-width: 100%;
+  }
+  .install-box code {
+    font-family: var(--mono);
+    font-size: .95rem;
+    color: var(--text);
+    margin-right: 14px;
+  }
+  .install-box code .cmd-prefix { color: var(--green); margin-right: 4px; }
+  .copy-btn {
+    background: var(--surface-hover);
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: .82rem;
+    cursor: pointer;
+    font-family: var(--sans);
+    transition: all .15s ease;
+  }
+  .copy-btn:hover { color: var(--text); border-color: var(--accent); background: rgba(56, 189, 248, 0.1); }
 
-  .install pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;font-family:var(--mono);font-size:.9rem;overflow-x:auto;margin-bottom:10px}
-  .install .k{color:var(--green)}
-  .note{color:var(--muted);font-size:.9rem;margin-top:6px}
+  .cta { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: .96rem;
+    border: 1px solid var(--border);
+    transition: all .15s ease;
+  }
+  .btn-primary {
+    background: var(--accent);
+    color: #081018;
+    border-color: var(--accent);
+    box-shadow: 0 2px 14px rgba(56, 189, 248, 0.3);
+  }
+  .btn-primary:hover { filter: brightness(1.1); transform: translateY(-1px); color: #081018; }
+  .btn-ghost { background: var(--surface); color: var(--text); }
+  .btn-ghost:hover { border-color: var(--border-bright); background: var(--surface-hover); transform: translateY(-1px); }
 
-  footer{text-align:center;padding:50px 20px;color:var(--muted);font-size:.9rem;border-top:1px solid var(--border)}
-  footer a{margin:0 8px}
-  @media(max-width:600px){h1{font-size:1.7rem}.logo{font-size:2rem}}
+  /* Platforms chip row */
+  .platform-chips {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(17, 24, 34, 0.7);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 5px 12px;
+    font-size: .82rem;
+    color: var(--muted);
+  }
+  .chip svg { width: 14px; height: 14px; fill: currentColor; }
+
+  /* Workflow & Terminal Interactive Frame */
+  .demo-container {
+    margin: 40px auto 60px;
+    background: #0d131c;
+    border: 1px solid var(--border-bright);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(56, 189, 248, 0.1);
+  }
+
+  /* VS Code simulated header */
+  .vscode-topbar {
+    background: #090e15;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: .82rem;
+    color: var(--muted);
+  }
+  .window-dots { display: flex; gap: 7px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; }
+  .dot.r { background: #ef4444; }
+  .dot.y { background: #f59e0b; }
+  .dot.g { background: #10b981; }
+  .vscode-tabs { display: flex; gap: 8px; align-items: center; font-family: var(--mono); font-size: .8rem; }
+  .vtab {
+    padding: 4px 12px;
+    border-radius: 5px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid transparent;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .vtab.active { background: #131c27; border-color: var(--border); color: var(--text); }
+  .vtab.term-tab { border-left: 2px solid var(--accent); color: var(--accent); }
+
+  /* Scenario Tabs Navigation */
+  .scenario-nav {
+    display: flex;
+    background: #0a0f16;
+    border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .scenario-nav::-webkit-scrollbar { display: none; }
+  .s-btn {
+    padding: 12px 18px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-size: .88rem;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all .15s ease;
+  }
+  .s-btn:hover { color: var(--text); background: rgba(255,255,255,0.02); }
+  .s-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+    background: rgba(56, 189, 248, 0.05);
+  }
+
+  /* Terminal content window */
+  .term-content {
+    padding: 22px 24px;
+    font-family: var(--mono);
+    font-size: .88rem;
+    line-height: 1.7;
+    min-height: 340px;
+    overflow-x: auto;
+    background: #0b1018;
+  }
+  .term-line { margin-bottom: 4px; }
+  .p-prompt { color: var(--green); font-weight: 700; }
+  .p-cmd { color: #f8fafc; font-weight: 600; }
+  .p-sys { color: var(--amber); }
+  .p-dim { color: #64748b; }
+  .p-out { color: #cbd5e1; }
+  .p-head { color: var(--amber); font-weight: 700; text-transform: uppercase; }
+  .p-code-box {
+    border-left: 2px solid var(--cyan);
+    padding-left: 12px;
+    margin: 8px 0;
+    color: #e2e8f0;
+  }
+  .p-code-tag { color: var(--cyan); font-weight: 600; margin-bottom: 4px; font-size: .82rem; }
+  .p-metric { color: #64748b; font-size: .82rem; border-top: 1px dashed #1e293b; padding-top: 8px; margin-top: 10px; }
+  .p-bar-green { color: var(--green); }
+  .p-src { color: var(--accent); text-decoration: underline; }
+
+  /* Section styling */
+  section { padding: 60px 0; border-top: 1px solid var(--border); }
+  .section-header { text-align: center; max-width: 650px; margin: 0 auto 40px; }
+  h2 { font-size: 1.85rem; margin-bottom: 10px; font-weight: 700; letter-spacing: -0.01em; }
+  .section-header p { color: var(--muted); font-size: 1.05rem; }
+
+  /* Comparison Workflow Section */
+  .workflow-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-top: 24px;
+  }
+  .workflow-card {
+    background: var(--surface-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    position: relative;
+    transition: all .2s ease;
+  }
+  .workflow-card:hover {
+    border-color: var(--border-bright);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+  }
+  .workflow-card.featured {
+    border-color: rgba(56, 189, 248, 0.4);
+    background: linear-gradient(180deg, rgba(56, 189, 248, 0.05) 0%, rgba(14, 21, 32, 0.8) 100%);
+  }
+  .wf-badge {
+    position: absolute;
+    top: -11px;
+    right: 20px;
+    background: var(--accent);
+    color: #0b111a;
+    font-size: .74rem;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+  }
+  .wf-icon { font-size: 1.8rem; margin-bottom: 14px; }
+  .workflow-card h3 { font-size: 1.15rem; margin-bottom: 8px; }
+  .workflow-card p { color: var(--muted); font-size: .92rem; line-height: 1.6; }
+  .wf-highlight {
+    margin-top: 16px;
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: .82rem;
+    color: var(--cyan);
+  }
+
+  /* Grid Features */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .f-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px;
+    transition: border-color .15s ease;
+  }
+  .f-card:hover { border-color: var(--border-bright); }
+  .f-card .f-ico {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(56, 189, 248, 0.1);
+    color: var(--accent);
+    margin-bottom: 14px;
+    font-size: 1.2rem;
+  }
+  .f-card h3 { font-size: 1.05rem; margin-bottom: 6px; }
+  .f-card p { color: var(--muted); font-size: .9rem; line-height: 1.6; }
+
+  /* Install Tabs & Steps */
+  .install-section {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px;
+    margin-top: 20px;
+  }
+  .install-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .it-btn {
+    background: none;
+    border: 1px solid transparent;
+    color: var(--muted);
+    padding: 6px 14px;
+    border-radius: 6px;
+    font-size: .88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all .15s ease;
+  }
+  .it-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+  .it-btn.active {
+    background: var(--surface-card);
+    border-color: var(--border);
+    color: var(--accent);
+  }
+  .it-panel { display: none; }
+  .it-panel.active { display: block; }
+  .install-code {
+    background: #090e15;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    font-family: var(--mono);
+    font-size: .92rem;
+    color: var(--text);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    overflow-x: auto;
+  }
+  .quick-setup-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-top: 28px;
+    border-top: 1px solid var(--border);
+    padding-top: 24px;
+  }
+  .qs-step { display: flex; gap: 12px; }
+  .qs-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--green);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: .82rem;
+    font-family: var(--mono);
+    flex-shrink: 0;
+  }
+  .qs-step h4 { font-size: .95rem; margin-bottom: 4px; }
+  .qs-step p { color: var(--muted); font-size: .86rem; line-height: 1.5; }
+
+  /* Footer */
+  footer {
+    text-align: center;
+    padding: 50px 20px 40px;
+    color: var(--muted);
+    font-size: .88rem;
+    border-top: 1px solid var(--border);
+  }
+  footer a { margin: 0 8px; color: var(--muted); }
+  footer a:hover { color: var(--text); }
+
+  @media (max-width: 640px) {
+    header { padding: 45px 15px 30px; }
+    .install-box { padding: 8px 12px; }
+    .term-content { font-size: .8rem; padding: 16px; }
+    .install-section { padding: 20px; }
+  }
 </style>
 </head>
 <body>
 
+<nav>
+  <div class="nav-brand">
+    <span class="caret">❯</span> ask
+    <span class="nav-badge">v0.1.0</span>
+  </div>
+  <div class="nav-links">
+    <a href="#workflow">Workflow</a>
+    <a href="#how">How it Works</a>
+    <a href="#features">Features</a>
+    <a href="#install">Install</a>
+    <a href="https://github.com/sinhaKAN-ra/ask" target="_blank" rel="noopener">GitHub ★</a>
+  </div>
+</nav>
+
 <header>
   <div class="wrap">
-    <div class="logo"><span class="caret">❯</span> ask</div>
-    <h1>A terminal AI that knows when to search the web.</h1>
-    <p class="tagline">Instant answers for what the model knows. Automatic, cited web search for what it doesn't — because it tells you when it's not sure.</p>
-    <div class="install-oneliner"><span class="k">pipx</span> install aolbeam-ask</div>
-    <div class="cta">
-      <a class="btn btn-primary" href="https://pypi.org/project/aolbeam-ask/">Install from PyPI</a>
-      <a class="btn btn-ghost" href="https://github.com/sinhaKAN-ra/ask">★ View on GitHub</a>
+    <div class="pill-badge">
+      <span class="pill-dot"></span>
+      Zero idle memory · Live web fallback · Cross-platform
     </div>
-    <div class="avail">
-      <span class="avail-label">Now available on</span>
-      <a href="https://pypi.org/project/aolbeam-ask/" class="chip"><span class="chip-dot"></span>PyPI <code>v0.1.0</code></a>
-      <a href="https://github.com/sinhaKAN-ra/ask" class="chip"><span class="chip-dot"></span>GitHub</a>
-      <a href="https://github.com/sinhaKAN-ra/homebrew-tap" class="chip"><span class="chip-dot"></span>Homebrew tap</a>
+    <h1>Lightweight AI right inside your terminal.</h1>
+    <p class="tagline">
+      Keep your heavy AI agent for big refactors. Use <strong>ask</strong> for every quick doubt, syntax lookup, and log check directly in your VS Code terminal — <strong>without opening browser tabs, switching windows, or running background daemons.</strong>
+    </p>
+
+    <div class="install-box">
+      <code><span class="cmd-prefix">$</span> pipx install aolbeam-ask</code>
+      <button class="copy-btn" onclick="copyText('pipx install aolbeam-ask', this)">Copy</button>
+    </div>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="#install">Install Now</a>
+      <a class="btn btn-ghost" href="https://github.com/sinhaKAN-ra/ask" target="_blank" rel="noopener">
+        <svg height="18" width="18" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+        Star on GitHub
+      </a>
+    </div>
+
+    <div class="platform-chips">
+      <span class="chip">macOS</span>
+      <span class="chip">Linux</span>
+      <span class="chip">Windows (PowerShell &amp; cmd)</span>
+      <span class="chip">VS Code Terminal</span>
+      <span class="chip">WSL &amp; Git Bash</span>
     </div>
   </div>
 </header>
 
-<div class="wrap">
-  <div class="term">
-    <div class="term-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="term-title">zsh — ask</span></div>
-<pre><span class="prompt">❯</span> <span class="cmd">ask "explain git rebase vs merge in 3 lines"</span>
-<span class="out">Git merge joins two histories with a new commit, keeping both branches.
-Git rebase replays your commits onto another branch for a linear history.
-Use merge to preserve context; use rebase for a clean log.</span>
+<!-- Interactive Showcase in VS Code Frame -->
+<div class="wrap" id="workflow">
+  <div class="demo-container">
+    <div class="vscode-topbar">
+      <div class="window-dots">
+        <span class="dot r"></span>
+        <span class="dot y"></span>
+        <span class="dot g"></span>
+      </div>
+      <div class="vscode-tabs">
+        <span class="vtab">server.ts</span>
+        <span class="vtab">auth.py</span>
+        <span class="vtab active term-tab">Terminal (ask)</span>
+      </div>
+      <div style="font-size: .75rem; color: #64748b;">zsh / powershell</div>
+    </div>
 
-<span class="prompt">❯</span> <span class="cmd">ask "latest stable version of Rust"</span>
-<span class="sys">[ask] searching the web (tavily) — model self-assessed: version may have changed</span>
-<span class="out">Rust 1.98.1 </span><span class="src">[1]</span>
+    <div class="scenario-nav">
+      <button class="s-btn active" onclick="switchScenario('doubts', this)">
+        <span>💬</span> Quick Doubts in Editor
+      </button>
+      <button class="s-btn" onclick="switchScenario('fresh', this)">
+        <span>🌐</span> Live Web &amp; Fresh Docs
+      </button>
+      <button class="s-btn" onclick="switchScenario('lines', this)">
+        <span>📄</span> Inspecting Code Slices
+      </button>
+      <button class="s-btn" onclick="switchScenario('pipe', this)">
+        <span>📥</span> Piping Error Logs
+      </button>
+      <button class="s-btn" onclick="switchScenario('export', this)">
+        <span>📑</span> Pipe Directly to Markdown
+      </button>
+    </div>
 
-<span class="out">Sources:</span>
-  <span class="src">[1]</span> <span class="out">Announcing Rust 1.98.1 | Rust Blog</span>
-      <span class="src">https://blog.rust-lang.org/...</span></pre>
+    <div class="term-content" id="term-view">
+      <!-- Default view: Quick Doubts -->
+      <div class="term-line"><span class="p-prompt">❯</span> <span class="p-cmd">ask "how do I sort a dict by value in python?"</span></div>
+      <div class="term-line p-out" style="margin-top: 8px;">Use <code style="color:var(--cyan)">sorted()</code> with a key lambda:</div>
+      <div class="p-code-box">
+        <div class="p-code-tag">┌── python ─────────────────────────────────</div>
+        <div>data = {"apple": 5, "banana": 2, "cherry": 8}</div>
+        <div>sorted_dict = dict(sorted(data.items(), key=lambda item: item[1]))</div>
+        <div class="p-code-tag">└───────────────────────────────────────────</div>
+      </div>
+      <div class="term-line p-out">• To reverse order, pass <code style="color:var(--cyan)">reverse=True</code>.</div>
+      <div class="p-metric">
+        ────────────────────────────────────────────────────────<br>
+        model   : llama-3.3-70b-versatile (groq)<br>
+        tokens  : 82 prompt + 64 compl = 146<br>
+        context : [<span class="p-bar-green">█</span><span style="color:#334155;">░░░░░░░░░░░░░░░░░░░</span>] 0.1% of 128,000<br>
+        latency : 0.42s   finish: stop
+      </div>
+    </div>
   </div>
 </div>
 
-<section id="origin">
-  <div class="wrap">
-    <h2>Why I built this</h2>
-    <p class="sub">A quick question should cost a quick command — not a running process.</p>
-    <p style="color:var(--muted);max-width:680px;line-height:1.75">
-      I wanted <strong style="color:var(--text)">lightweight LLM access from the terminal</strong>, the place I already live as a developer. But every option made me stop and open something heavy first — a browser tab, a desktop app idling in the background, an Electron client eating hundreds of MB of RAM, or an assistant locked inside the editor. Just to ask <em>"what's the flag for this?"</em> I had to break focus and leave a resource-hungry tool running.
-    </p>
-    <p style="color:var(--muted);max-width:680px;line-height:1.75;margin-top:14px">
-      That felt backwards. So <code>ask</code> is built on one rule: <strong style="color:var(--green)">spawn, answer, exit.</strong> Each call runs for a second or two, prints the answer, and is gone — a single stdlib-only Python file, <strong style="color:var(--text)">zero idle memory, no daemon, no background app.</strong> You get the answer in your flow, and your machine goes right back to doing nothing.
-    </p>
-  </div>
-</section>
-
 <section id="why">
   <div class="wrap">
-    <h2>Why it's different</h2>
-    <p class="sub">Most terminal AI tools pick one extreme. <code>ask</code> fills the empty middle.</p>
-    <div class="grid">
-      <div class="card"><div class="ico">🐢</div><h3>Never search</h3><p>Fast, but confidently wrong on anything after the model's training cutoff.</p></div>
-      <div class="card"><div class="ico">🔁</div><h3>Always search</h3><p>Accurate on fresh facts, but slow and heavy on every single query.</p></div>
-      <div class="card" style="border-color:var(--green)"><div class="ico">🎯</div><h3>ask: search when stale</h3><p>The model self-assesses its own answer and only searches when it admits it might be out of date.</p></div>
+    <div class="section-header">
+      <h2>The Real Developer Dilemma</h2>
+      <p>How <code>ask</code> fits into your modern coding workflow alongside heavy AI agents.</p>
+    </div>
+
+    <div class="workflow-grid">
+      <div class="workflow-card">
+        <div class="wf-icon">🤖</div>
+        <h3>The Main AI Agent</h3>
+        <p>Built for big refactors, multi-file codebases, and architectural discussions. Powerful, but overkill and slow when you just need a flag, regex, or quick sanity check.</p>
+        <div class="wf-highlight">Best for: heavy lifting &amp; large tasks</div>
+      </div>
+
+      <div class="workflow-card">
+        <div class="wf-icon">🌐</div>
+        <h3>The Browser Tab</h3>
+        <p>Switching away from your editor to ChatGPT or Claude breaks deep focus. You wait for web UI rendering, open yet another tab, and leave RAM-eating windows idling in the background.</p>
+        <div class="wf-highlight" style="color: #ef4444;">Friction: breaks focus &amp; flow</div>
+      </div>
+
+      <div class="workflow-card featured">
+        <span class="wf-badge">The Solution</span>
+        <div class="wf-icon">⚡</div>
+        <h3>ask in Your Terminal</h3>
+        <p>Type a quick question right in your VS Code terminal. It runs in 0.5s, answers clearly with syntax highlighting, and exits. <strong>0 MB memory when idle.</strong> No server, no tab.</p>
+        <div class="wf-highlight" style="color: var(--green);">Spawn ➔ Answer ➔ Exit (0 MB idle)</div>
+      </div>
     </div>
   </div>
 </section>
 
 <section id="how">
   <div class="wrap">
-    <h2>How it works</h2>
-    <p class="sub">A simple, reliable mechanism — model self-reporting, not fragile phrase-matching.</p>
-    <div class="how">
-      <div class="step"><div class="n">01</div><h4>Answer</h4><p>The model answers your question normally.</p></div>
-      <div class="step"><div class="n">02</div><h4>Self-assess</h4><p>It appends a hidden line: <code>NEEDS_WEB: yes/no</code> + a reason.</p></div>
-      <div class="step"><div class="n">03</div><h4>Decide</h4><p>ask reads that line, strips it from view, and searches only if flagged.</p></div>
-      <div class="step"><div class="n">04</div><h4>Ground &amp; cite</h4><p>Re-asks grounded in results, prints the answer with numbered sources.</p></div>
+    <div class="section-header">
+      <h2>Self-Assessing Live Web Fallback</h2>
+      <p>It doesn't guess on fresh information — the model itself knows when to search.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="f-card">
+        <div class="f-ico">1</div>
+        <h3>Direct Answer First</h3>
+        <p>For timeless questions ("how does TCP handshake work?"), it answers immediately from LLM weights in under a second.</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">2</div>
+        <h3>Machine-Readable Check</h3>
+        <p>The model appends a hidden self-assessment: <code>NEEDS_WEB: yes | no</code>. If it flags that information may be past its training or time-sensitive, search triggers.</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">3</div>
+        <h3>Live Grounded Re-Ask</h3>
+        <p>Fetches real-time search results (keyless DuckDuckGo, Tavily, Serper, or Brave) and grounds the final answer with clickable citation links <code>[1]</code>.</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">4</div>
+        <h3>Zero Idle Overhead</h3>
+        <p>Search happens only during that single command. Nothing stays running in the background after the answer is printed.</p>
+      </div>
     </div>
   </div>
 </section>
 
 <section id="features">
   <div class="wrap">
-    <h2>Features</h2>
-    <p class="sub">Everything you'd want from a terminal companion — and nothing resident when idle.</p>
-    <div class="grid">
-      <div class="card"><div class="ico">🪶</div><h3>Zero idle memory</h3><p>No daemon, no server. Each call spawns, runs ~1–2s, prints, and exits.</p></div>
-      <div class="card"><div class="ico">🔌</div><h3>Any OpenAI-compatible API</h3><p>Groq, Gemini, OpenRouter, Cerebras, or a fully local Ollama.</p></div>
-      <div class="card"><div class="ico">📄</div><h3>File &amp; line context</h3><p><code>ask -f big.py:50-120 "..."</code> — send only the lines you need.</p></div>
-      <div class="card"><div class="ico">📥</div><h3>Stdin piping</h3><p><code>cat error.log | ask "what broke?"</code></p></div>
-      <div class="card"><div class="ico">🔎</div><h3>Pluggable search</h3><p>Keyless DuckDuckGo by default; Tavily, Serper, or Brave with a key.</p></div>
-      <div class="card"><div class="ico">💬</div><h3>Conversation memory</h3><p>Readable sessions you can list, resume, and rename.</p></div>
+    <div class="section-header">
+      <h2>Built for Modern Terminals</h2>
+      <p>Everything you need from an everyday command-line companion.</p>
+    </div>
+
+    <div class="features-grid">
+      <div class="f-card">
+        <div class="f-ico">🎨</div>
+        <h3>Terminal-Width Responsive</h3>
+        <p>Automatically measures your terminal columns. Wraps markdown smoothly, creates clean code block borders, and formats tables so lines never wrap awkwardly.</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">🎛️</div>
+        <h3>Controlled Formats</h3>
+        <p>Switch between <code>--format rich</code> (ANSI styled), <code>--format plain</code> (no escape codes), or <code>--format md</code> (raw Markdown for piping to files).</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">🪟</div>
+        <h3>Cross-Platform Native</h3>
+        <p>Auto-enables VT100/ANSI processing and UTF-8 console output on Windows 10+ (PowerShell and cmd.exe). Works identically across macOS, Linux, and WSL.</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">✂️</div>
+        <h3>Line-Slice Context</h3>
+        <p>Pass only the lines you care about: <code>ask -f server.py:40-85 "why is this slow?"</code>. Prevent context-window bloat effortlessly.</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">📥</div>
+        <h3>Piped Stdin Context</h3>
+        <p>Pipe logs, git diffs, or commands: <code>cat err.log | ask "summarize root cause"</code> or <code>git diff | ask "write commit msg"</code>.</p>
+      </div>
+      <div class="f-card">
+        <div class="f-ico">🔌</div>
+        <h3>Any OpenAI-Compatible Provider</h3>
+        <p>Defaults to lightning-fast free Groq. Easily switch to Gemini, OpenRouter, Cerebras, or fully local private Ollama in <code>~/.ask-cli/config.json</code>.</p>
+      </div>
     </div>
   </div>
 </section>
 
-<section id="install" class="install">
+<section id="install">
   <div class="wrap">
-    <h2>Install</h2>
-    <p class="sub">The package is <code>aolbeam-ask</code>; the command is <code>ask</code>.</p>
+    <div class="section-header">
+      <h2>Install in Seconds</h2>
+      <p>Pure Python standard library with zero runtime dependencies.</p>
+    </div>
 
-    <p class="note"><strong>pipx</strong> (recommended)</p>
-    <pre><span class="k">pipx</span> install aolbeam-ask</pre>
+    <div class="install-section">
+      <div class="install-tabs">
+        <button class="it-btn active" onclick="switchInstall('pipx', this)">pipx (Recommended)</button>
+        <button class="it-btn" onclick="switchInstall('curl', this)">macOS / Linux (curl)</button>
+        <button class="it-btn" onclick="switchInstall('windows', this)">Windows (PowerShell)</button>
+        <button class="it-btn" onclick="switchInstall('brew', this)">Homebrew</button>
+        <button class="it-btn" onclick="switchInstall('uvx', this)">No-install (uvx)</button>
+      </div>
 
-    <p class="note"><strong>pip</strong></p>
-    <pre><span class="k">pip</span> install aolbeam-ask</pre>
+      <div class="it-panel active" id="p-pipx">
+        <div class="install-code">
+          <code><span style="color:var(--green)">$</span> pipx install aolbeam-ask</code>
+          <button class="copy-btn" onclick="copyText('pipx install aolbeam-ask', this)">Copy</button>
+        </div>
+        <p style="color:var(--muted); font-size: .88rem;">Installs an isolated binary executable <code>ask</code> directly onto your PATH.</p>
+      </div>
 
-    <p class="note"><strong>Homebrew</strong></p>
-    <pre><span class="k">brew</span> install sinhaKAN-ra/tap/ask</pre>
+      <div class="it-panel" id="p-curl">
+        <div class="install-code">
+          <code><span style="color:var(--green)">$</span> curl -fsSL https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.sh | bash</code>
+          <button class="copy-btn" onclick="copyText('curl -fsSL https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.sh | bash', this)">Copy</button>
+        </div>
+        <p style="color:var(--muted); font-size: .88rem;">Downloads the single-file script to <code>~/.ask-cli</code> and symlinks to <code>~/.local/bin/ask</code>.</p>
+      </div>
 
-    <p class="note"><strong>One-line script</strong></p>
-    <pre><span class="k">curl</span> -fsSL https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.sh | bash</pre>
+      <div class="it-panel" id="p-windows">
+        <div class="install-code">
+          <code><span style="color:var(--cyan)">PS&gt;</span> irm https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.ps1 | iex</code>
+          <button class="copy-btn" onclick="copyText('irm https://raw.githubusercontent.com/sinhaKAN-ra/ask/main/install.ps1 | iex', this)">Copy</button>
+        </div>
+        <p style="color:var(--muted); font-size: .88rem;">Installs for Windows PowerShell &amp; Command Prompt, adding wrappers to User PATH.</p>
+      </div>
 
-    <p class="note"><strong>Run without installing</strong></p>
-    <pre><span class="k">uvx</span> aolbeam-ask "your question"</pre>
+      <div class="it-panel" id="p-brew">
+        <div class="install-code">
+          <code><span style="color:var(--green)">$</span> brew install sinhaKAN-ra/tap/ask</code>
+          <button class="copy-btn" onclick="copyText('brew install sinhaKAN-ra/tap/ask', this)">Copy</button>
+        </div>
+        <p style="color:var(--muted); font-size: .88rem;">Managed Homebrew tap installation for macOS &amp; Linux.</p>
+      </div>
 
-    <p class="note">Then get a free key at <a href="https://console.groq.com/keys">console.groq.com/keys</a>, <code>export GROQ_API_KEY="gsk_..."</code>, and run <code>ask "hello"</code>. Full docs in the <a href="https://github.com/sinhaKAN-ra/ask#readme">README</a>.</p>
+      <div class="it-panel" id="p-uvx">
+        <div class="install-code">
+          <code><span style="color:var(--green)">$</span> uvx aolbeam-ask "your question"</code>
+          <button class="copy-btn" onclick="copyText('uvx aolbeam-ask &quot;your question&quot;', this)">Copy</button>
+        </div>
+        <p style="color:var(--muted); font-size: .88rem;">Ephemeral zero-install execution via <code>uv</code>.</p>
+      </div>
+
+      <div class="quick-setup-steps">
+        <div class="qs-step">
+          <div class="qs-num">1</div>
+          <div>
+            <h4>Get a Free Key</h4>
+            <p>Grab an instant free API key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a>.</p>
+          </div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">2</div>
+          <div>
+            <h4>Set Env Var</h4>
+            <p>Add <code>export GROQ_API_KEY="gsk_..."</code> to your <code>~/.zshrc</code>, <code>~/.bashrc</code>, or Windows env vars.</p>
+          </div>
+        </div>
+        <div class="qs-step">
+          <div class="qs-num">3</div>
+          <div>
+            <h4>Ask Away</h4>
+            <p>Type <code>ask "explain git cherry-pick"</code> in any terminal and stay in your flow!</p>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap">
-    <p>MIT licensed · built by <a href="https://github.com/sinhaKAN-ra">Karan Sinha</a></p>
-    <p style="margin-top:10px">
-      <a href="https://github.com/sinhaKAN-ra/ask">GitHub</a>·
-      <a href="https://github.com/sinhaKAN-ra/ask/issues">Issues</a>·
-      <a href="https://github.com/sinhaKAN-ra/ask/blob/main/CONTRIBUTING.md">Contribute</a>·
+    <p>MIT licensed · Built with zero runtime dependencies by <a href="https://github.com/sinhaKAN-ra" target="_blank" rel="noopener">Karan Sinha</a></p>
+    <p style="margin-top:12px;">
+      <a href="https://github.com/sinhaKAN-ra/ask" target="_blank" rel="noopener">GitHub</a> ·
+      <a href="https://pypi.org/project/aolbeam-ask/" target="_blank" rel="noopener">PyPI</a> ·
+      <a href="https://github.com/sinhaKAN-ra/ask/issues" target="_blank" rel="noopener">Issues</a> ·
       <a href="mailto:nomore.report@gmail.com">Contact</a>
     </p>
   </div>
 </footer>
 
-<!-- Vercel Web Analytics (static-site injection; enable Analytics in the Vercel project dashboard) -->
+<script>
+  // Scenario switcher for interactive VS Code terminal
+  const scenarios = {
+    doubts: `
+      <div class="term-line"><span class="p-prompt">❯</span> <span class="p-cmd">ask "how do I sort a dict by value in python?"</span></div>
+      <div class="term-line p-out" style="margin-top: 8px;">Use <code style="color:var(--cyan)">sorted()</code> with a key lambda:</div>
+      <div class="p-code-box">
+        <div class="p-code-tag">┌── python ─────────────────────────────────</div>
+        <div>data = {"apple": 5, "banana": 2, "cherry": 8}</div>
+        <div>sorted_dict = dict(sorted(data.items(), key=lambda item: item[1]))</div>
+        <div class="p-code-tag">└───────────────────────────────────────────</div>
+      </div>
+      <div class="term-line p-out">• To reverse order, pass <code style="color:var(--cyan)">reverse=True</code>.</div>
+      <div class="p-metric">
+        ────────────────────────────────────────────────────────<br>
+        model   : llama-3.3-70b-versatile (groq)<br>
+        tokens  : 82 prompt + 64 compl = 146<br>
+        context : [<span class="p-bar-green">█</span><span style="color:#334155;">░░░░░░░░░░░░░░░░░░░</span>] 0.1% of 128,000<br>
+        latency : 0.42s   finish: stop
+      </div>
+    `,
+    fresh: `
+      <div class="term-line"><span class="p-prompt">❯</span> <span class="p-cmd">ask "latest stable release of Bun and its key changes"</span></div>
+      <div class="term-line p-sys">[ask] searching the web (duckduckgo) — model self-assessed: release may be newer than training</div>
+      <div class="term-line p-out" style="margin-top: 8px;">Bun 1.2 is the latest major release <span class="p-src">[1]</span>.</div>
+      <div class="term-line p-out">• Added full S3 API support in <code style="color:var(--cyan)">Bun.s3</code>.</div>
+      <div class="term-line p-out">• Built-in PostgreSQL client (<code style="color:var(--cyan)">bun:sql</code>) with high-speed binary protocol.</div>
+      <div class="term-line p-out">• Enhanced Node.js C++ addon compatibility.</div>
+      <div style="margin-top: 10px;" class="p-dim">
+        ────────────────────────────────────────────────────────<br>
+        Sources:<br>
+        &nbsp;&nbsp;[1] Bun 1.2 Release Announcement — <span class="p-src">https://bun.sh/blog/bun-v1.2</span>
+      </div>
+      <div class="p-metric">
+        model   : llama-3.3-70b-versatile (groq)<br>
+        web     : duckduckgo — 5 result(s)  [model self-assessed]<br>
+        latency : 1.24s   finish: stop
+      </div>
+    `,
+    lines: `
+      <div class="term-line"><span class="p-prompt">❯</span> <span class="p-cmd">ask -f auth.py:45-72 "why does this token validation fail on refresh?"</span></div>
+      <div class="term-line p-out" style="margin-top: 8px;">In line 58 of <code style="color:var(--cyan)">auth.py</code>, you are verifying the signature with <code style="color:var(--amber)">ACCESS_SECRET</code> instead of <code style="color:var(--green)">REFRESH_SECRET</code>:</div>
+      <div class="p-code-box">
+        <div class="p-code-tag">┌── python ─────────────────────────────────</div>
+        <div># Fix at auth.py:58</div>
+        <div>- payload = jwt.decode(token, settings.ACCESS_SECRET, algorithms=["HS256"])</div>
+        <div>+ payload = jwt.decode(token, settings.REFRESH_SECRET, algorithms=["HS256"])</div>
+        <div class="p-code-tag">└───────────────────────────────────────────</div>
+      </div>
+      <div class="p-metric">
+        context : auth.py  (~1,240 chars / ~310 tok)  [lines 45-72 of 210]<br>
+        tokens  : 410 prompt + 92 compl = 502<br>
+        latency : 0.65s   finish: stop
+      </div>
+    `,
+    pipe: `
+      <div class="term-line"><span class="p-prompt">❯</span> <span class="p-cmd">cat docker-compose.log | ask "what caused the db container crash?"</span></div>
+      <div class="term-line p-out" style="margin-top: 8px;">The crash at 12:44:02 was caused by an <strong>Out of Memory (OOM) killer</strong>:</div>
+      <div class="term-line p-out">• <code style="color:var(--amber)">postgres: could not resize shared memory segment (OOM)</code></div>
+      <div class="term-line p-out">• Fix: Increase <code style="color:var(--cyan)">shm_size: 256mb</code> in your <code style="color:var(--cyan)">docker-compose.yml</code> for the db service.</div>
+      <div class="p-metric">
+        context : &lt;stdin&gt;  (~3,450 chars / ~862 tok)<br>
+        tokens  : 960 prompt + 78 compl = 1,038<br>
+        latency : 0.58s   finish: stop
+      </div>
+    `,
+    export: `
+      <div class="term-line"><span class="p-prompt">❯</span> <span class="p-cmd">ask --format md "write a Dockerfile for multi-stage Go build" &gt; Dockerfile</span></div>
+      <div class="term-line p-dim">[ask auto-detects piped stdout and outputs clean raw Markdown without terminal formatting]</div>
+      <div class="term-line"><span class="p-prompt">❯</span> <span class="p-cmd">head -n 6 Dockerfile</span></div>
+      <div class="p-code-box">
+        <div>FROM golang:1.24-alpine AS builder</div>
+        <div>WORKDIR /app</div>
+        <div>COPY go.mod go.sum ./</div>
+        <div>RUN go mod download</div>
+        <div>COPY . .</div>
+        <div>RUN CGO_ENABLED=0 GOOS=linux go build -o main .</div>
+      </div>
+      <div class="term-line p-out" style="color:var(--green);">✓ Saved directly to Dockerfile in your workspace.</div>
+    `
+  };
+
+  function switchScenario(key, btn) {
+    document.querySelectorAll('.s-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const view = document.getElementById('term-view');
+    view.innerHTML = scenarios[key];
+  }
+
+  function switchInstall(key, btn) {
+    document.querySelectorAll('.it-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.it-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('p-' + key).classList.add('active');
+  }
+
+  function copyText(text, btn) {
+    navigator.clipboard.writeText(text).then(() => {
+      const orig = btn.innerText;
+      btn.innerText = 'Copied!';
+      btn.style.color = 'var(--green)';
+      btn.style.borderColor = 'var(--green)';
+      setTimeout(() => {
+        btn.innerText = orig;
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 1800);
+    });
+  }
+</script>
+
+<!-- Vercel Web Analytics & Speed Insights -->
 <script>
   window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
 </script>
 <script defer src="/_vercel/insights/script.js"></script>
-
-<!-- Vercel Speed Insights (optional, same enablement) -->
 <script>
   window.si = window.si || function () { (window.siq = window.siq || []).push(arguments); };
 </script>
